@@ -85,7 +85,7 @@ fn main() {
     let m = 10000;
     let n = 1024;
     let mut x1: Vec<Complex32> = (0..n).map(|xx| Complex32::new(xx as f32, 0.0)).collect();
-    let mut x2 = x1.clone();
+    let x2 = x1.clone();
     let mut planner = FftPlanner::new();
     let rfft = planner.plan_fft_forward(n);
     let myfft = Radix2Fft::new(n);
@@ -99,21 +99,35 @@ fn main() {
     }
     */
 
-    let now = Instant::now();
-    for _ in 0..m {
-        rfft.process(&mut x1);
+    let mut bestyet = 9999.0;
+    for _ in 0..8 {
+        let now = Instant::now();
+        for _ in 0..m {
+            rfft.process(&mut x1);
+        }
+        let dt = now.elapsed().as_secs_f64();
+        if dt < bestyet {
+            bestyet = dt;
+        }
     }
     println!(
         "Rust FFT: {} us.",
-        1e6 * now.elapsed().as_secs_f64() / m as f64
+        1e6 * bestyet / m as f64
     );
 
-    let now = Instant::now();
-    for _ in 0..m {
-        myfft.execute(&x2);
+    let mut bestyet = 9999.0;
+    for _ in 0..8 {
+        let now = Instant::now();
+        for _ in 0..m {
+            myfft.execute(&x2);
+        }
+        let dt = now.elapsed().as_secs_f64();
+        if dt < bestyet {
+            bestyet = dt;
+        }
     }
     println!(
         "Radix-2 DIT FFT: {} us.",
-        1e6 * now.elapsed().as_secs_f64() / m as f64
+        1e6 * bestyet / m as f64
     );
 }
