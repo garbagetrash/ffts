@@ -9,3 +9,4 @@ num-complex = "0.4"
 rustfft = "*"
 wide = "*"
 metal = { version = "0.32", optional = true }
+amx = { git = "https://github.com/garbagetrash/amx-rs.git", optional = true }

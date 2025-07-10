@@ -1,8 +1,23 @@
 use num::complex::Complex32;
 use rustfft::*;
+use amx::*;
 
 use std::f32::consts::PI;
 use std::time::Instant;
+
+
+fn dft_matrix(n: u32) -> Vec<Vec<Complex32>> {
+    let mut output = vec![];
+    let w = Complex32::new(0.0, 2.0*PI/n as f32).exp();
+    for row in 0..n {
+        let mut line = vec![];
+        for col in 0..n {
+            line.push(w.powu(((row*col)%n) as u32));
+        }
+        output.push(line);
+    }
+    output
+}
 
 fn bitrev(i: usize, nbits: u32) -> usize {
     let mut output = 0;
@@ -13,6 +28,47 @@ fn bitrev(i: usize, nbits: u32) -> usize {
         }
     }
     output
+}
+
+fn bitrevrange(i: usize) -> Vec<usize> {
+    let nbits = i.ilog2();
+    (0..i).map(|x| bitrev(x, nbits)).collect()
+}
+
+fn fft_rec(x: &mut [Complex32], idxs: &[usize], base: bool) {
+    let n = idxs.len();
+
+    if n <= 1 {
+        return
+    }
+
+    let even_idxs: Vec<usize> = idxs.iter().step_by(2).copied().collect();
+    let odd_idxs: Vec<usize> = idxs[1..].iter().step_by(2).copied().collect();
+
+    if base || n > 32 {
+        fft_rec(x, &even_idxs, base);
+        fft_rec(x, &odd_idxs, base);
+    } else {
+        let A = dft_matrix((n / 2) as u32);
+        let mut ctx = amx::AmxCtx::new().unwrap();
+        //unsafe { ctx.load512(x[even_idxs[0]].as_ptr(), XRow(0)) };
+        //unsafe { ctx.load512(x[odd_idxs[0]].as_ptr(), YRow(0)) };
+        //ctx.outer_product_f32_xy_to_z(Some(XBytes(0)), Some(YBytes(0)), ZRow(0), false);
+        //ctx.outer_product_f32_xy_to_z(Some(XBytes(0)), Some(YBytes(0)), ZRow(1), true);
+        let rtn: [u8; 4096] = ctx.read_z();
+        //let new_even = matmul(A, even);
+        //let new_odd = matmul(A, odd);
+        //for i in 0..n/2 {
+        //  even[i] = new_even[i];
+        //  odd[i] = new_odd[i];
+        //}
+    }
+
+    for k in 0..n/2 {
+        let t = Complex32::new(0.0, -2.0 * PI * k as f32 / n as f32).exp() * x[odd_idxs[k]];
+        x[idxs[k]] = x[even_idxs[k]] + t;
+        x[idxs[n/2 + k]] = x[even_idxs[k]] - t;
+    }
 }
 
 struct Radix2Fft {
@@ -86,6 +142,7 @@ fn main() {
     let n = 1024;
     let mut x1: Vec<Complex32> = (0..n).map(|xx| Complex32::new(xx as f32, 0.0)).collect();
     let x2 = x1.clone();
+    let mut x3 = x1.clone();
     let mut planner = FftPlanner::new();
     let rfft = planner.plan_fft_forward(n);
     let myfft = Radix2Fft::new(n);
@@ -128,6 +185,22 @@ fn main() {
     }
     println!(
         "Radix-2 DIT FFT: {} us.",
+        1e6 * bestyet / m as f64
+    );
+
+    let mut bestyet = 9999.0;
+    for _ in 0..8 {
+        let now = Instant::now();
+        for _ in 0..m {
+            fft_rec(&mut x3, &(0..n).collect::<Vec<_>>(), true);
+        }
+        let dt = now.elapsed().as_secs_f64();
+        if dt < bestyet {
+            bestyet = dt;
+        }
+    }
+    println!(
+        "Recursive DIT FFT: {} us.",
         1e6 * bestyet / m as f64
     );
 }
